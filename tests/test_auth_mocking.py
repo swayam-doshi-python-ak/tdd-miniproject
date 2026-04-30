@@ -1,5 +1,6 @@
 import pytest
 
+
 class TestRegisterMocking:
 
     def test_save_user_called_on_success(self, auth, mock_db):
@@ -35,6 +36,35 @@ class TestLoginMocking:
         """Failed login must never create a session."""
         auth.login("ghost", "wrongpassword")
         mock_db.save_session.assert_not_called()
+
+
+class TestSessionMocking:
+
+    def test_authenticate_valid_token(self, logged_in_auth, mock_db):
+        """Valid token must return the correct username."""
+        auth, token = logged_in_auth
+        result = auth.authenticate(token)
+        assert result["success"] is True
+        assert result["username"] == "alice"
+
+    def test_authenticate_invalid_token(self, auth, mock_db):
+        """Invalid token must be rejected."""
+        mock_db.get_session.return_value = None
+        result = auth.authenticate("fake-token")
+        assert result["success"] is False
+        assert result["message"] == "Invalid or expired token"
+
+    def test_logout_invalidates_session(self, logged_in_auth, mock_db):
+        """Logout must delete the session from DB."""
+        auth, token = logged_in_auth
+        auth.logout(token)
+        mock_db.delete_session.assert_called_once_with(token)
+
+    def test_logout_invalid_token_fails(self, auth, mock_db):
+        """Logout with bad token must fail gracefully."""
+        mock_db.get_session.return_value = None
+        result = auth.logout("invalid-token")
+        assert result["success"] is False
 
 
 class TestDBFailure:
