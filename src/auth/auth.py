@@ -1,39 +1,52 @@
 import hashlib
 import secrets
 
+# ─────────────────────────────────────
+# CONSTANTS
+# ─────────────────────────────────────
+MIN_PASSWORD_LENGTH = 6
+TOKEN_BYTE_LENGTH = 32
+
 
 class AuthSystem:
+    """
+    In-memory authentication system.
 
-    def __init__(self):
-        # { username: { "password": hashed_password } }
-        self._users = {}
+    Responsibilities:
+        - Register users with hashed passwords
+        - Login and issue secure session tokens
+        - Authenticate requests via token
+        - Logout and invalidate tokens
 
-        # { token: username }
-        self._sessions = {}
+    Not responsible for:
+        - Persistence (no DB here)
+        - Password reset
+        - Email verification
+    """
+
+    def __init__(self) -> None:
+        self._users: dict[str, dict] = {}
+        self._sessions: dict[str, str] = {}
 
     # ─────────────────────────────────────
     # PRIVATE HELPERS
     # ─────────────────────────────────────
 
     def _hash_password(self, password: str) -> str:
-        """
-        SHA-256 hash.
-        Same password always produces same hash → good for comparison.
-        Never reversible → passwords are safe even if data leaks.
-        """
+        """One-way SHA-256 hash of a plain text password."""
         return hashlib.sha256(password.encode()).hexdigest()
 
     def _generate_token(self) -> str:
-        """
-        Cryptographically secure random token.
-        secrets module is safer than random module for auth tokens.
-        64 hex chars = 32 bytes = virtually impossible to guess.
-        """
-        return secrets.token_hex(32)
+        """Cryptographically secure random session token."""
+        return secrets.token_hex(TOKEN_BYTE_LENGTH)
 
     def _get_user(self, username: str) -> dict | None:
-        """Internal method to fetch a user record by username."""
+        """Fetch a user record. Returns None if not found."""
         return self._users.get(username)
+
+    def _is_valid_token(self, token: str) -> bool:
+        """Check if a token exists in active sessions."""
+        return token in self._sessions
 
     # ─────────────────────────────────────
     # VALIDATION
@@ -41,22 +54,33 @@ class AuthSystem:
 
     def _validate_registration(self, username: str, password: str) -> str | None:
         """
-        Returns an error message string if invalid.
-        Returns None if everything is fine.
+        Validate registration input.
+        Returns error message string or None if valid.
         """
         if not username:
             return "Username cannot be empty"
-        if len(password) < 6:
+        if len(password) < MIN_PASSWORD_LENGTH:
             return "Password must be at least 6 characters"
         if username in self._users:
             return "User already exists"
         return None
 
     # ─────────────────────────────────────
-    # REGISTRATION
+    # PUBLIC API
     # ─────────────────────────────────────
 
     def register(self, username: str, password: str) -> dict:
+        """
+        Register a new user.
+
+        Args:
+            username: Must be non-empty string
+            password: Must be at least 6 characters
+
+        Returns:
+            {"success": True, "message": ...}
+            {"success": False, "message": ...}
+        """
         error = self._validate_registration(username, password)
         if error:
             return {"success": False, "message": error}
@@ -66,15 +90,18 @@ class AuthSystem:
         }
         return {"success": True, "message": "User registered successfully"}
 
-    # ─────────────────────────────────────
-    # LOGIN
-    # ─────────────────────────────────────
-
     def login(self, username: str, password: str) -> dict:
-        user = self._get_user(username)
+        """
+        Authenticate a user and issue a session token.
 
-        # NOTE: We give the SAME error for wrong username OR wrong password.
-        # This is a security best practice — attacker can't tell which one failed.
+        Security note: Returns same error for wrong username
+        AND wrong password to prevent user enumeration attacks.
+
+        Returns:
+            {"success": True, "token": ...}
+            {"success": False, "message": ...}
+        """
+        user = self._get_user(username)
         if not user or user["password"] != self._hash_password(password):
             return {"success": False, "message": "Invalid credentials"}
 
@@ -82,22 +109,27 @@ class AuthSystem:
         self._sessions[token] = username
         return {"success": True, "token": token}
 
-    # ─────────────────────────────────────
-    # SESSION / TOKEN
-    # ─────────────────────────────────────
-
     def authenticate(self, token: str) -> dict:
-        username = self._sessions.get(token)
-        if not username:
-            return {"success": False, "message": "Invalid or expired token"}
-        return {"success": True, "username": username}
+        """
+        Validate a session token.
 
-    # ─────────────────────────────────────
-    # LOGOUT
-    # ─────────────────────────────────────
+        Returns:
+            {"success": True, "username": ...}
+            {"success": False, "message": ...}
+        """
+        if not self._is_valid_token(token):
+            return {"success": False, "message": "Invalid or expired token"}
+        return {"success": True, "username": self._sessions[token]}
 
     def logout(self, token: str) -> dict:
-        if token not in self._sessions:
+        """
+        Invalidate a session token.
+
+        Returns:
+            {"success": True, "message": ...}
+            {"success": False, "message": ...}
+        """
+        if not self._is_valid_token(token):
             return {"success": False, "message": "Invalid or expired token"}
         del self._sessions[token]
         return {"success": True, "message": "Logged out successfully"}
