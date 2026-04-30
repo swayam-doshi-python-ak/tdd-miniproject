@@ -8,21 +8,18 @@ class TestAuthRegistration(unittest.TestCase):
     def setUp(self):
         """
         Runs BEFORE every single test.
-        Always gives us a fresh AuthSystem — tests never affect each other.
         """
         self.auth = AuthSystem()
 
     def tearDown(self):
         """
         Runs AFTER every single test.
-        Clean up anything if needed (close DB, clear files etc.)
-        Here our AuthSystem is in-memory so nothing to do — but good habit!
         """
         self.auth = None
 
-    # ─────────────────────────────────────
+
     # REGISTRATION
-    # ─────────────────────────────────────
+ 
 
     def test_register_new_user_successfully(self):
         result = self.auth.register("alice", "password123")
@@ -56,15 +53,14 @@ class TestAuthLogin(unittest.TestCase):
 
     def setUp(self):
         self.auth = AuthSystem()
-        # Pre-register a user so login tests don't repeat registration
-        self.auth.register("alice", "password123")
+        self.auth.register("alice", "password123")   # dpendent on registration working 
 
     def tearDown(self):
         self.auth = None
 
-    # ─────────────────────────────────────
+
     # LOGIN
-    # ─────────────────────────────────────
+ 
 
     def test_login_with_correct_credentials(self):
         result = self.auth.login("alice", "password123")
@@ -101,9 +97,9 @@ class TestAuthSession(unittest.TestCase):
         self.auth = None
         self.token = None
 
-    # ─────────────────────────────────────
+
     # SESSION / TOKEN
-    # ─────────────────────────────────────
+
 
     def test_valid_token_authenticates_user(self):
         result = self.auth.authenticate(self.token)
@@ -115,9 +111,9 @@ class TestAuthSession(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertEqual(result["message"], "Invalid or expired token")
 
-    # ─────────────────────────────────────
+
     # LOGOUT
-    # ─────────────────────────────────────
+
 
     def test_logout_invalidates_token(self):
         self.auth.logout(self.token)
@@ -131,3 +127,8 @@ class TestAuthSession(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# TDD 
+
+# uv run pytest tests/test_auth.py -v
